@@ -41,13 +41,13 @@ export default function TaskDetail({
   }, [task.id])
 
   async function loadComments() {
-    const { data } = await supabase.from('comments').select('*, profiles(*)').eq('task_id', task.id).order('created_at')
+    const { data } = await supabase.from('comments').select('*, profiles:user_id(id, email, full_name, avatar_url, created_at)').eq('task_id', task.id).order('created_at')
     if (data) setComments(data)
   }
 
   async function handleSave() {
     setSaving(true)
-    const { data } = await supabase.from('tasks').update({
+    const updatePayload = {
       title: form.title,
       description: form.description || null,
       status: form.status,
@@ -55,8 +55,16 @@ export default function TaskDetail({
       assigned_to: form.assigned_to || null,
       project_id: form.project_id || null,
       due_date: form.due_date || null,
-    }).eq('id', task.id).select('*, profiles(*), projects(*)').single()
+    }
+    console.log('[TaskSave] payload:', updatePayload)
 
+    const { data, error } = await supabase.from('tasks').update(updatePayload)
+      .eq('id', task.id)
+      .select('*, profiles:assigned_to(id, email, full_name, avatar_url, created_at), projects:project_id(id, name, client_name, color, created_by, created_at)')
+      .single()
+
+    console.log('[TaskSave] data:', data)
+    if (error) console.error('[TaskSave] error:', error)
     if (data) onUpdate(data)
     setSaving(false)
   }
@@ -67,7 +75,7 @@ export default function TaskDetail({
       task_id: task.id,
       user_id: user.id,
       content: newComment.trim(),
-    }).select('*, profiles(*)').single()
+    }).select('*, profiles:user_id(id, email, full_name, avatar_url, created_at)').single()
     if (data) setComments(prev => [...prev, data])
     setNewComment('')
   }

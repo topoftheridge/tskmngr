@@ -99,6 +99,8 @@ export default function BoardClient({
         .select('*, profiles:assigned_to(id, email, full_name, avatar_url, created_at), projects:project_id(id, name, client_name, color, created_by, created_at)')
         .order('position')
       if (freshTasks) setTasks(freshTasks)
+      // Auto-open the newly created task for editing
+      setSelectedTask(data)
     }
     setNewTitle('')
     setAddingTo(null)
