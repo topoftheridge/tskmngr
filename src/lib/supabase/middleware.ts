@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isApprovedEmail } from '@/lib/allowlist'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -27,15 +28,35 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/auth')) {
+  const isLoginPage = request.nextUrl.pathname.startsWith('/login')
+  const isAuthCallback = request.nextUrl.pathname.startsWith('/auth')
+
+  // Not logged in → redirect to login (except login/auth pages)
+  if (!user && !isLoginPage && !isAuthCallback) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && request.nextUrl.pathname === '/login') {
+  // Logged in but email not approved → sign them out and redirect to login
+  if (user && !isApprovedEmail(user.email || '')) {
+    // Clear supabase cookies to force sign out
     const url = request.nextUrl.clone()
-    url.pathname = '/'
+    url.pathname = '/login'
+    const response = NextResponse.redirect(url)
+    // Delete all supabase auth cookies
+    request.cookies.getAll().forEach(cookie => {
+      if (cookie.name.includes('supabase') || cookie.name.includes('sb-')) {
+        response.cookies.delete(cookie.name)
+      }
+    })
+    return response
+  }
+
+  // Logged in + approved → redirect away from login
+  if (user && isLoginPage) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/board'
     return NextResponse.redirect(url)
   }
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { isApprovedEmail } from '@/lib/allowlist'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -19,19 +20,35 @@ export default function LoginPage() {
     setLoading(true)
     const supabase = createClient()
 
+    if (!isApprovedEmail(email)) {
+      setError('Access is restricted to approved team members.')
+      setLoading(false)
+      return
+    }
+
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName } },
+        options: {
+          data: { full_name: fullName },
+          emailRedirectTo: undefined,
+        },
       })
       if (error) { setError(error.message); setLoading(false); return }
-      setError('Check your email for a confirmation link!')
-      setLoading(false)
+
+      // Auto sign-in immediately after signup
+      if (data.user && !data.session) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+        if (signInError) { setError(signInError.message); setLoading(false); return }
+      }
+
+      router.push('/board')
+      router.refresh()
     } else {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { setError(error.message); setLoading(false); return }
-      router.push('/')
+      router.push('/board')
       router.refresh()
     }
   }
@@ -45,13 +62,13 @@ export default function LoginPage() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex mb-6 bg-slate-100 rounded-lg p-1">
             <button
-              onClick={() => setIsSignUp(false)}
+              onClick={() => { setIsSignUp(false); setError('') }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition ${!isSignUp ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
             >
               Sign In
             </button>
             <button
-              onClick={() => setIsSignUp(true)}
+              onClick={() => { setIsSignUp(true); setError('') }}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition ${isSignUp ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}
             >
               Sign Up
@@ -85,7 +102,7 @@ export default function LoginPage() {
               minLength={6}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             />
-            {error && <p className={`text-sm ${error.includes('Check') ? 'text-green-600' : 'text-red-600'}`}>{error}</p>}
+            {error && <p className="text-sm text-red-600">{error}</p>}
             <button
               type="submit"
               disabled={loading}
