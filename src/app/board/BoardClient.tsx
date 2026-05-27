@@ -51,6 +51,10 @@ export default function BoardClient({
   const [projectFilter, setProjectFilter] = useState<string>('')
   const [addingTo, setAddingTo] = useState<TaskStatus | null>(null)
   const [newTitle, setNewTitle] = useState('')
+  const [projectList, setProjectList] = useState(projects)
+  const [showNewProject, setShowNewProject] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [newProjectClient, setNewProjectClient] = useState('')
 
   const filtered = useMemo(() => {
     let t = tasks
@@ -106,6 +110,24 @@ export default function BoardClient({
     setAddingTo(null)
   }
 
+  const PROJECT_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#14b8a6']
+
+  async function handleCreateProject() {
+    if (!newProjectName.trim()) return
+    const color = PROJECT_COLORS[projectList.length % PROJECT_COLORS.length]
+    const { data, error } = await supabase.from('projects').insert({
+      name: newProjectName.trim(),
+      client_name: newProjectClient.trim() || null,
+      color,
+      created_by: user.id,
+    }).select().single()
+    if (error) { console.error('[ProjectCreate] error:', error); return }
+    if (data) setProjectList(prev => [...prev, data])
+    setNewProjectName('')
+    setNewProjectClient('')
+    setShowNewProject(false)
+  }
+
   async function handleTaskUpdate(updated: Task) {
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t))
     setSelectedTask(updated)
@@ -128,15 +150,52 @@ export default function BoardClient({
           onChange={e => setSearch(e.target.value)}
           className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full sm:w-64"
         />
-        <select
-          value={projectFilter}
-          onChange={e => setProjectFilter(e.target.value)}
-          className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          <option value="">All Projects</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}{p.client_name ? ` (${p.client_name})` : ''}</option>)}
-        </select>
+        <div className="flex gap-2 items-center">
+          <select
+            value={projectFilter}
+            onChange={e => setProjectFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="">All Projects</option>
+            {projectList.map(p => <option key={p.id} value={p.id}>{p.name}{p.client_name ? ` (${p.client_name})` : ''}</option>)}
+          </select>
+          <button
+            onClick={() => setShowNewProject(true)}
+            className="px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shrink-0"
+          >+ Project</button>
+        </div>
       </div>
+
+      {/* New Project Modal */}
+      {showNewProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setShowNewProject(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl border border-slate-200 p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-4">New Project</h3>
+            <div className="space-y-3">
+              <input
+                autoFocus
+                placeholder="Project name"
+                value={newProjectName}
+                onChange={e => setNewProjectName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreateProject() }}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <input
+                placeholder="Client name (optional)"
+                value={newProjectClient}
+                onChange={e => setNewProjectClient(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreateProject() }}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <div className="flex gap-2">
+                <button onClick={handleCreateProject} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Create</button>
+                <button onClick={() => setShowNewProject(false)} className="px-4 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Board */}
       <DragDropContext onDragEnd={handleDragEnd}>
@@ -200,7 +259,7 @@ export default function BoardClient({
       {selectedTask && (
         <TaskDetail
           task={selectedTask}
-          projects={projects}
+          projects={projectList}
           profiles={profiles}
           user={user}
           onClose={() => setSelectedTask(null)}
