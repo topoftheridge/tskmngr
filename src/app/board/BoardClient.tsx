@@ -78,14 +78,28 @@ export default function BoardClient({
 
   async function handleQuickAdd(status: TaskStatus) {
     if (!newTitle.trim()) return
-    const { data } = await supabase.from('tasks').insert({
+    const payload = {
       title: newTitle.trim(),
       status,
+      priority: 'medium' as const,
       created_by: user.id,
       position: columnTasks(status).length,
-    }).select('*, profiles(*), projects(*)').single()
+    }
+    console.log('[TaskInsert] payload:', payload)
 
-    if (data) setTasks(prev => [...prev, data])
+    const { data, error } = await supabase.from('tasks').insert(payload).select('*, profiles:assigned_to(id, email, full_name, avatar_url, created_at), projects:project_id(id, name, client_name, color, created_by, created_at)').single()
+
+    console.log('[TaskInsert] data:', data)
+    if (error) { console.error('[TaskInsert] error:', error); return }
+
+    if (data) {
+      // Re-fetch all tasks to ensure consistency
+      const { data: freshTasks } = await supabase
+        .from('tasks')
+        .select('*, profiles:assigned_to(id, email, full_name, avatar_url, created_at), projects:project_id(id, name, client_name, color, created_by, created_at)')
+        .order('position')
+      if (freshTasks) setTasks(freshTasks)
+    }
     setNewTitle('')
     setAddingTo(null)
   }
