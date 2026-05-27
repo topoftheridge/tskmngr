@@ -1,6 +1,8 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Shell from '@/components/Shell'
+import { createClient } from '@/lib/supabase/client'
 import { Task, Profile, STATUS_LABELS, STATUS_COLORS, PRIORITY_COLORS, COLUMNS } from '@/lib/types'
 import type { User } from '@supabase/supabase-js'
 import Link from 'next/link'
@@ -14,7 +16,18 @@ function StatCard({ label, value, color }: { label: string; value: number; color
   )
 }
 
-export default function Dashboard({ tasks, profiles, user }: { tasks: Task[]; profiles: Profile[]; user: User }) {
+export default function Dashboard({ tasks: initialTasks, profiles, user }: { tasks: Task[]; profiles: Profile[]; user: User }) {
+  const [tasks, setTasks] = useState(initialTasks)
+
+  // Refresh tasks from Supabase on mount to get latest data
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from('tasks')
+      .select('*, profiles:assigned_to(id, email, full_name, avatar_url, created_at), projects:project_id(id, name, client_name, color, created_by, created_at)')
+      .order('created_at', { ascending: false })
+      .then(({ data }) => { if (data) setTasks(data) })
+  }, [])
   const statusCounts = COLUMNS.reduce((acc, s) => {
     acc[s] = tasks.filter(t => t.status === s).length
     return acc

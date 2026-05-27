@@ -10,7 +10,7 @@ export default async function DashboardPage() {
   if (!user) redirect('/login')
 
   const [{ data: tasks }, { data: profiles }] = await Promise.all([
-    supabase.from('tasks').select('*, profiles(*), projects(*)').order('created_at', { ascending: false }),
+    supabase.from('tasks').select('*, profiles:assigned_to(id, email, full_name, avatar_url, created_at), projects:project_id(id, name, client_name, color, created_by, created_at)').order('created_at', { ascending: false }),
     supabase.from('profiles').select('*'),
   ])
 
